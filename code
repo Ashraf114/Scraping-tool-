@@ -1,0 +1,55 @@
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import quote_plus
+
+def scrape_event_details(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    event_name = soup.find('h1', class_='listing-hero-title').text.strip()
+    event_date = soup.find('div', class_='event-details__data').text.strip()
+    event_location = soup.find('div', class_='event-details__data').find_next('div', class_='event-details__data').text.strip()
+    event_description = soup.find('div', class_='structured-content-rich-text').text.strip()
+    organizer = soup.find('div', class_='js-organizer-details').find('a').text.strip()
+
+    return {
+        'event_name': event_name,
+        'event_date': event_date,
+        'event_location': event_location,
+        'event_description': event_description,
+        'organizer': organizer
+    }
+
+def google_search(query):
+    search_url = f"https://www.google.com/search?q={quote_plus(query)}"
+    response = requests.get(search_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    search_results = []
+    for result in soup.find_all('div', class_='tF2Cxc'):
+        title = result.find('h3', class_='LC20lb DKV0Md').text
+        snippet = result.find('span', class_='aCOpRe').text
+        link = result.find('a')['href']
+        search_results.append({'title': title, 'snippet': snippet, 'link': link})
+    
+    return search_results
+
+def enrich_event_data(events):
+    for event in events:
+        query = event['event_name'] + ' ' + event['organizer']
+        search_results = google_search(query)
+        event['google_search_results'] = search_results
+
+def save_events_to_json(events, filename):
+    import json
+    with open(filename, 'w') as f:
+        json.dump(events, f, indent=4)
+
+def main():
+    event_url = 'https://www.eventbrite.com/example-event'
+    events = [scrape_event_details(event_url)]
+    enrich_event_data(events)
+    save_events_to_json(events, 'events.json')
+
+if __name__ == "__main__":
+    main()
